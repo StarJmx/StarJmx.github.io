@@ -1,17 +1,17 @@
 
 
-[![senli1073](https://img.shields.io/badge/senli1073-github-blue?logo=github)](https://github.com/senli1073)
+[![StarJmx](https://img.shields.io/badge/senli1073-github-blue?logo=github)](https://github.com/StarJmx)
 
-He is currently a Fellow in the Department of Earth and Planetary Sciences (EPS) at Harvard University.
+He is currently a Ph.D. student at the Shanghai Autonomous Intelligent Unmanned Systems Science Center of Tongji University.
 
 #### Contact
 
-Email: senli[at]fas.harvard.edu
+Email: jiangmingxing97@163.com
 
 #### Education
-M.E., Computer Science and Technology, China University of Mining and Technology, 2022—2025.\
-B.E., Data Science and Big Data Technology, China University of Mining and Technology, 2018—2022.
+Ph.D., Intelligent Science and Technology, Shanghai Research Institute for Intelligent Autonomous Systems, Tongji University, Currently enrolled.\
+M.S., Environmental Science and Engineering, College of Environmental Science and Engineering, Liaoning Technical University.\
+B.E., Internet of Things Engineering, School of  Computer and Information Engineering, Xinxiang University.
 
 #### Research Interests
-Deep Learning, Artificial Intelligence Seismology, Mine Microseismic.
-
+AI for Research and Development: Artificial intelligence, Machine learning, Data mining, Intelligent applications, AI for Science (environment, materials, medicine, etc.).
