@@ -1,6 +1,6 @@
 
 
-[![StarJmx](https://img.shields.io/badge/senli1073-github-blue?logo=github)](https://github.com/StarJmx)
+[![StarJmx](https://img.shields.io/badge/StarJmx-github-blue?logo=Github)](https://github.com/StarJmx)
 
 He is currently a Ph.D. student at the Shanghai Autonomous Intelligent Unmanned Systems Science Center of Tongji University.
 
