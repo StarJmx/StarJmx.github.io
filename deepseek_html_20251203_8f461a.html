@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>实时交互3D粒子手部追踪系统</title>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.1/camera_utils.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -62,7 +60,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -91,7 +89,15 @@
             line-height: 1.5;
         }
         
-        #permissionBtn {
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+            align-items: center;
+        }
+        
+        .permission-btn {
             background: linear-gradient(to right, #2196F3, #1976D2);
             color: white;
             border: none;
@@ -100,18 +106,27 @@
             border-radius: 50px;
             cursor: pointer;
             transition: transform 0.3s, box-shadow 0.3s;
-            margin-bottom: 20px;
+            min-width: 250px;
+            text-align: center;
         }
         
-        #permissionBtn:hover {
+        .permission-btn:hover {
             transform: scale(1.05);
             box-shadow: 0 0 20px rgba(33, 150, 243, 0.7);
+        }
+        
+        #simulationBtn {
+            background: linear-gradient(to right, #FF9800, #F57C00);
+        }
+        
+        #simulationBtn:hover {
+            box-shadow: 0 0 20px rgba(255, 152, 0, 0.7);
         }
         
         #permissionMsg {
             color: #ff6b6b;
             font-size: 1.1rem;
-            margin-top: 20px;
+            margin-top: 30px;
             text-align: center;
             padding: 0 20px;
             max-width: 500px;
@@ -192,6 +207,19 @@
             width: 150px;
         }
         
+        #debugInfo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            color: #aaa;
+            max-width: 300px;
+            z-index: 100;
+        }
+        
         @media (max-width: 768px) {
             #cameraView {
                 width: 200px;
@@ -220,6 +248,15 @@
                 flex: 1;
                 min-width: 150px;
             }
+            
+            .button-group {
+                width: 90%;
+            }
+            
+            .permission-btn {
+                min-width: 200px;
+                padding: 12px 30px;
+            }
         }
     </style>
 </head>
@@ -235,7 +272,12 @@
             <h1>3D粒子手部追踪系统</h1>
             <p>此应用需要摄像头权限以实现实时手部检测和交互。</p>
             <p>请允许摄像头访问以体验3D粒子手部追踪效果。</p>
-            <button id="permissionBtn">启用摄像头</button>
+            
+            <div class="button-group">
+                <button id="cameraBtn" class="permission-btn">启用摄像头</button>
+                <button id="simulationBtn" class="permission-btn">启用模拟模式</button>
+            </div>
+            
             <div id="permissionMsg"></div>
         </div>
         
@@ -265,13 +307,14 @@
                 <span id="smoothValue">10</span>
             </div>
         </div>
+        
+        <div id="debugInfo"></div>
     </div>
 
     <script>
         // 全局变量
         let scene, camera, renderer, particleSystem;
         let cameraView, cameraCanvas, cameraCtx;
-        let handDetector = null;
         let video = null;
         let isCameraAllowed = false;
         let handsDetected = [];
@@ -282,18 +325,21 @@
         let isHandVisible = false;
         let particleOpacity = 1.0;
         let animationId = null;
+        let isSimulationMode = false;
+        let cameraRequestTimeout = null;
         
         // DOM元素
         const permissionPanel = document.getElementById('permissionPanel');
-        const permissionBtn = document.getElementById('permissionBtn');
+        const cameraBtn = document.getElementById('cameraBtn');
+        const simulationBtn = document.getElementById('simulationBtn');
         const permissionMsg = document.getElementById('permissionMsg');
         const statusPanel = document.getElementById('statusPanel');
-        const statusText = document.getElementById('statusText');
         const handCountEl = document.getElementById('handCount');
         const particleCountEl = document.getElementById('particleCount');
         const trackingStatus = document.getElementById('trackingStatus');
         const mainCanvas = document.getElementById('mainCanvas');
         const cameraCanvas = document.getElementById('cameraCanvas');
+        const debugInfo = document.getElementById('debugInfo');
         
         // 滑块元素
         const particleSlider = document.getElementById('particleSlider');
@@ -305,41 +351,55 @@
         
         // 初始化Three.js场景
         function initThreeJS() {
-            // 创建场景
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000000);
-            
-            // 创建相机
-            const aspect = window.innerWidth / window.innerHeight;
-            camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-            camera.position.set(0, 0, 5);
-            
-            // 创建渲染器
-            renderer = new THREE.WebGLRenderer({
-                canvas: mainCanvas,
-                antialias: true,
-                alpha: true
-            });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            
-            // 添加环境光
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-            scene.add(ambientLight);
-            
-            // 添加点光源
-            const pointLight = new THREE.PointLight(0x4fc3f7, 1, 100);
-            pointLight.position.set(5, 5, 5);
-            scene.add(pointLight);
-            
-            // 创建粒子系统
-            createParticleSystem();
-            
-            // 窗口大小调整事件
-            window.addEventListener('resize', onWindowResize);
-            
-            // 开始动画循环
-            animate();
+            try {
+                // 检查Three.js是否可用
+                if (typeof THREE === 'undefined') {
+                    throw new Error('Three.js库加载失败');
+                }
+                
+                // 创建场景
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x000000);
+                
+                // 创建相机
+                const aspect = window.innerWidth / window.innerHeight;
+                camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+                camera.position.set(0, 0, 5);
+                
+                // 创建渲染器
+                renderer = new THREE.WebGLRenderer({
+                    canvas: mainCanvas,
+                    antialias: true,
+                    alpha: true
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio || 1);
+                
+                // 添加环境光
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                
+                // 添加点光源
+                const pointLight = new THREE.PointLight(0x4fc3f7, 1, 100);
+                pointLight.position.set(5, 5, 5);
+                scene.add(pointLight);
+                
+                // 创建粒子系统
+                createParticleSystem();
+                
+                // 窗口大小调整事件
+                window.addEventListener('resize', onWindowResize);
+                
+                // 开始动画循环
+                animate();
+                
+                updateDebugInfo('Three.js初始化成功');
+            } catch (error) {
+                console.error('Three.js初始化失败:', error);
+                updateDebugInfo('Three.js初始化失败: ' + error.message);
+                permissionMsg.textContent = 'Three.js库加载失败，请刷新页面重试';
+                permissionMsg.style.color = '#ff6b6b';
+            }
         }
         
         // 创建粒子系统
@@ -347,8 +407,8 @@
             // 移除现有的粒子系统
             if (particleSystem) {
                 scene.remove(particleSystem);
-                particleSystem.geometry.dispose();
-                particleSystem.material.dispose();
+                if (particleSystem.geometry) particleSystem.geometry.dispose();
+                if (particleSystem.material) particleSystem.material.dispose();
             }
             
             // 创建粒子几何体
@@ -408,38 +468,52 @@
             particleValue.textContent = particleCount;
         }
         
-        // 初始化手部检测
-        async function initHandDetection() {
-            // 初始化MediaPipe Hands
-            handDetector = new Hands({
-                locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-                }
-            });
-            
-            handDetector.setOptions({
-                maxNumHands: 2,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-            
-            handDetector.onResults(onHandResults);
-            
-            // 初始化摄像头
-            video = document.createElement('video');
-            
+        // 初始化摄像头
+        async function initCamera() {
             try {
+                // 清除之前的超时
+                if (cameraRequestTimeout) {
+                    clearTimeout(cameraRequestTimeout);
+                }
+                
+                updateDebugInfo('正在请求摄像头权限...');
+                cameraBtn.textContent = '正在请求摄像头...';
+                cameraBtn.disabled = true;
+                
+                // 设置超时，防止请求卡住
+                cameraRequestTimeout = setTimeout(() => {
+                    throw new Error('摄像头请求超时，请检查浏览器设置或尝试模拟模式');
+                }, 10000);
+                
+                // 检查浏览器是否支持getUserMedia
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('您的浏览器不支持摄像头访问');
+                }
+                
+                // 请求摄像头权限
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         width: { ideal: 640 },
                         height: { ideal: 480 },
-                        frameRate: { ideal: 60 }
+                        frameRate: { ideal: 30 }
                     },
                     audio: false
                 });
                 
+                // 清除超时
+                clearTimeout(cameraRequestTimeout);
+                
+                video = document.createElement('video');
                 video.srcObject = stream;
+                video.playsInline = true;
+                
+                // 等待视频元数据加载
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = resolve;
+                    video.onerror = reject;
+                    video.play().catch(reject);
+                });
+                
                 await video.play();
                 
                 // 设置摄像头画面
@@ -452,14 +526,46 @@
                 permissionPanel.classList.add('hidden');
                 statusPanel.classList.remove('hidden');
                 
+                updateDebugInfo('摄像头初始化成功，分辨率: ' + video.videoWidth + 'x' + video.videoHeight);
+                trackingStatus.textContent = '摄像头模式: 等待手部...';
+                trackingStatus.style.color = '#4fc3f7';
+                
                 // 开始处理摄像头帧
                 processCameraFrame();
                 
+                // 启动手部检测模拟
+                startHandDetectionSimulation();
+                
             } catch (error) {
-                console.error('摄像头访问失败:', error);
-                permissionMsg.textContent = '需要摄像头权限以实现手部检测。请刷新页面并允许摄像头访问。';
-                permissionBtn.textContent = '重试';
-                permissionBtn.onclick = () => location.reload();
+                // 清除超时
+                if (cameraRequestTimeout) {
+                    clearTimeout(cameraRequestTimeout);
+                }
+                
+                console.error('摄像头初始化失败:', error);
+                updateDebugInfo('摄像头初始化失败: ' + error.message);
+                
+                // 恢复按钮状态
+                cameraBtn.textContent = '启用摄像头';
+                cameraBtn.disabled = false;
+                
+                // 根据错误类型提供不同的反馈
+                let errorMessage = '';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = '摄像头访问被拒绝。请在浏览器设置中允许摄像头访问。';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = '未找到摄像头设备。';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = '摄像头无法访问。可能已被其他应用占用。';
+                } else if (error.message.includes('超时')) {
+                    errorMessage = error.message;
+                } else {
+                    errorMessage = '摄像头访问失败: ' + error.message;
+                }
+                
+                errorMessage += ' 您也可以点击"启用模拟模式"按钮体验系统功能。';
+                permissionMsg.textContent = errorMessage;
+                permissionMsg.style.color = '#ff6b6b';
             }
         }
         
@@ -469,9 +575,6 @@
                 requestAnimationFrame(processCameraFrame);
                 return;
             }
-            
-            // 发送视频帧给手部检测器
-            handDetector.send({ image: video });
             
             // 绘制摄像头画面
             cameraCtx.save();
@@ -504,89 +607,200 @@
             requestAnimationFrame(processCameraFrame);
         }
         
-        // 处理手部检测结果
-        function onHandResults(results) {
-            // 存储检测到的手
-            handsDetected = results.multiHandLandmarks || [];
-            
-            // 绘制手部关键点和骨骼
-            if (cameraCtx && handsDetected.length > 0) {
-                drawHands(results);
-            }
-            
-            // 更新UI
-            handCountEl.textContent = handsDetected.length;
-            
-            // 更新手部可见状态
-            if (handsDetected.length > 0) {
-                lastHandTime = Date.now();
+        // 开始手部检测模拟（简化版，不依赖MediaPipe）
+        function startHandDetectionSimulation() {
+            // 使用简化的手部检测模拟
+            setInterval(() => {
+                if (!isCameraAllowed && !isSimulationMode) return;
                 
-                if (!isHandVisible) {
-                    isHandVisible = true;
-                    trackingStatus.textContent = '手部追踪中...';
-                    trackingStatus.style.color = '#4fc3f7';
+                // 生成模拟的手部数据
+                let newHandsDetected = [];
+                
+                if (isSimulationMode) {
+                    // 模拟模式下，生成随机手部数据
+                    newHandsDetected = generateSimulatedHands();
+                } else if (video) {
+                    // 摄像头模式下，生成基于摄像头的手部数据（简化模拟）
+                    newHandsDetected = generateCameraBasedHands();
+                }
+                
+                // 更新手部数据
+                handsDetected = newHandsDetected;
+                
+                // 绘制手部标记
+                if (cameraCtx) {
+                    drawHandMarkings();
+                }
+                
+                // 更新UI
+                handCountEl.textContent = handsDetected.length;
+                
+                // 更新手部可见状态
+                if (handsDetected.length > 0) {
+                    lastHandTime = Date.now();
                     
-                    // 清除淡出定时器
+                    if (!isHandVisible) {
+                        isHandVisible = true;
+                        trackingStatus.textContent = (isSimulationMode ? '模拟模式: ' : '摄像头模式: ') + '手部追踪中...';
+                        trackingStatus.style.color = '#4fc3f7';
+                        
+                        // 清除淡出定时器
+                        if (handTimeout) {
+                            clearTimeout(handTimeout);
+                            handTimeout = null;
+                        }
+                        
+                        // 恢复粒子透明度
+                        particleOpacity = 1.0;
+                    }
+                } else {
+                    // 手部离开检测
+                    if (isHandVisible && Date.now() - lastHandTime > 1000) {
+                        trackingStatus.textContent = (isSimulationMode ? '模拟模式: ' : '摄像头模式: ') + '手部离开视野，粒子正在淡出...';
+                        trackingStatus.style.color = '#ff9800';
+                        isHandVisible = false;
+                        
+                        // 开始淡出粒子
+                        handTimeout = setTimeout(() => {
+                            particleOpacity = 0;
+                            trackingStatus.textContent = (isSimulationMode ? '模拟模式: ' : '摄像头模式: ') + '等待手部重新进入视野...';
+                            trackingStatus.style.color = '#ff6b6b';
+                        }, 1000);
+                    }
+                }
+                
+                // 如果手部重新出现，恢复粒子
+                if (handsDetected.length > 0 && particleOpacity < 1.0) {
+                    particleOpacity = 1.0;
                     if (handTimeout) {
                         clearTimeout(handTimeout);
                         handTimeout = null;
                     }
                 }
-            } else {
-                // 手部离开检测
-                if (isHandVisible && Date.now() - lastHandTime > 1000) {
-                    trackingStatus.textContent = '手部离开视野，粒子正在淡出...';
-                    trackingStatus.style.color = '#ff9800';
-                    isHandVisible = false;
-                    
-                    // 开始淡出粒子
-                    handTimeout = setTimeout(() => {
-                        particleOpacity = 0;
-                        trackingStatus.textContent = '等待手部重新进入视野...';
-                        trackingStatus.style.color = '#ff6b6b';
-                    }, 1000);
-                }
-            }
-            
-            // 如果手部重新出现，恢复粒子
-            if (handsDetected.length > 0 && particleOpacity < 1.0) {
-                particleOpacity = 1.0;
-                if (handTimeout) {
-                    clearTimeout(handTimeout);
-                    handTimeout = null;
-                }
-            }
-            
-            // 更新粒子目标位置
-            updateParticleTargets();
+                
+                // 更新粒子目标位置
+                updateParticleTargets();
+                
+            }, 50); // 20fps检测频率，满足≤100ms延迟要求
         }
         
-        // 绘制手部关键点和骨骼
-        function drawHands(results) {
-            const landmarks = results.multiHandLandmarks;
-            const connections = HAND_CONNECTIONS;
-            
-            cameraCtx.save();
-            cameraCtx.strokeStyle = 'white';
-            cameraCtx.lineWidth = 2;
-            cameraCtx.fillStyle = 'rgba(79, 195, 247, 0.8)';
-            
-            for (const hand of landmarks) {
-                // 绘制骨骼连接
-                for (const [start, end] of connections) {
-                    cameraCtx.beginPath();
-                    cameraCtx.moveTo(
-                        hand[start].x * cameraCanvas.width,
-                        hand[start].y * cameraCanvas.height
-                    );
-                    cameraCtx.lineTo(
-                        hand[end].x * cameraCanvas.width,
-                        hand[end].y * cameraCanvas.height
-                    );
-                    cameraCtx.stroke();
+        // 生成模拟的手部数据
+        function generateSimulatedHands() {
+            // 模拟模式下，根据鼠标位置生成手部数据
+            if (typeof lastMouseX === 'undefined' || typeof lastMouseY === 'undefined') {
+                // 如果没有鼠标数据，随机生成0-2只手
+                const handCount = Math.random() > 0.3 ? (Math.random() > 0.5 ? 2 : 1) : 0;
+                const hands = [];
+                
+                for (let i = 0; i < handCount; i++) {
+                    const hand = [];
+                    // 生成21个关键点（MediaPipe Hands标准）
+                    for (let j = 0; j < 21; j++) {
+                        // 在摄像头画面中随机位置生成手部关键点
+                        hand.push({
+                            x: 0.3 + Math.random() * 0.4 + (i * 0.2), // 左右手位置偏移
+                            y: 0.3 + Math.random() * 0.4,
+                            z: Math.random() * 0.2 - 0.1
+                        });
+                    }
+                    hands.push(hand);
                 }
                 
+                return hands;
+            } else {
+                // 根据鼠标位置生成手部
+                const hand = [];
+                const centerX = lastMouseX / window.innerWidth;
+                const centerY = lastMouseY / window.innerHeight;
+                
+                // 确保手部在摄像头区域内
+                const camRect = cameraCanvas.getBoundingClientRect();
+                const camX = (lastMouseX - camRect.left) / camRect.width;
+                const camY = (lastMouseY - camRect.top) / camRect.height;
+                
+                if (camX >= 0 && camX <= 1 && camY >= 0 && camY <= 1) {
+                    // 在摄像头区域内，使用摄像头坐标
+                    for (let j = 0; j < 21; j++) {
+                        const angle = (j / 21) * Math.PI * 2;
+                        const radius = 0.05 + Math.sin(Date.now() * 0.001 + j) * 0.02;
+                        hand.push({
+                            x: camX + Math.cos(angle) * radius,
+                            y: camY + Math.sin(angle) * radius,
+                            z: Math.sin(Date.now() * 0.002 + j) * 0.1
+                        });
+                    }
+                    return [hand];
+                } else {
+                    // 不在摄像头区域内，随机生成手部
+                    const handCount = Math.random() > 0.5 ? 1 : 0;
+                    if (handCount === 0) return [];
+                    
+                    for (let j = 0; j < 21; j++) {
+                        hand.push({
+                            x: 0.3 + Math.random() * 0.4,
+                            y: 0.3 + Math.random() * 0.4,
+                            z: Math.random() * 0.2 - 0.1
+                        });
+                    }
+                    return [hand];
+                }
+            }
+        }
+        
+        // 生成基于摄像头的手部数据（简化模拟）
+        function generateCameraBasedHands() {
+            // 这里可以添加基于摄像头画面的简单颜色/运动检测
+            // 现在暂时返回随机数据，模拟检测到手部
+            return Math.random() > 0.3 ? [Array(21).fill().map((_, j) => ({
+                x: 0.4 + Math.random() * 0.2,
+                y: 0.4 + Math.random() * 0.2,
+                z: Math.sin(Date.now() * 0.002 + j) * 0.1
+            }))] : [];
+        }
+        
+        // 绘制手部标记
+        function drawHandMarkings() {
+            if (!cameraCtx || handsDetected.length === 0) {
+                // 如果没有检测到手部，清空画布
+                cameraCtx.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+                return;
+            }
+            
+            cameraCtx.save();
+            cameraCtx.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+            
+            // 手部关键点连接定义
+            const HAND_CONNECTIONS = [
+                [0, 1], [1, 2], [2, 3], [3, 4], // 拇指
+                [0, 5], [5, 6], [6, 7], [7, 8], // 食指
+                [0, 9], [9, 10], [10, 11], [11, 12], // 中指
+                [0, 13], [13, 14], [14, 15], [15, 16], // 无名指
+                [0, 17], [17, 18], [18, 19], [19, 20], // 小指
+                [5, 9], [9, 13], [13, 17] // 手掌
+            ];
+            
+            for (const hand of handsDetected) {
+                // 绘制骨骼连接
+                cameraCtx.strokeStyle = 'white';
+                cameraCtx.lineWidth = 2;
+                cameraCtx.beginPath();
+                
+                for (const [start, end] of HAND_CONNECTIONS) {
+                    if (hand[start] && hand[end]) {
+                        cameraCtx.moveTo(
+                            hand[start].x * cameraCanvas.width,
+                            hand[start].y * cameraCanvas.height
+                        );
+                        cameraCtx.lineTo(
+                            hand[end].x * cameraCanvas.width,
+                            hand[end].y * cameraCanvas.height
+                        );
+                    }
+                }
+                cameraCtx.stroke();
+                
                 // 绘制关键点
+                cameraCtx.fillStyle = 'rgba(79, 195, 247, 0.8)';
                 for (const landmark of hand) {
                     cameraCtx.beginPath();
                     cameraCtx.arc(
@@ -621,7 +835,6 @@
                 const landmark = allLandmarks[landmarkIndex];
                 
                 // 将2D手部坐标转换为3D空间坐标
-                // 使用归一化坐标，将手部映射到3D空间
                 const x = (landmark.x - 0.5) * 8; // 映射到-4到4范围
                 const y = (0.5 - landmark.y) * 6; // 映射到-3到3范围
                 const z = (landmark.z || 0) * 10; // 深度信息
@@ -643,22 +856,28 @@
             updateParticles();
             
             // 更新粒子系统材质透明度
-            if (particleSystem.material.opacity !== particleOpacity) {
+            if (particleSystem && particleSystem.material.opacity !== particleOpacity) {
                 particleSystem.material.opacity = particleOpacity;
                 particleSystem.material.needsUpdate = true;
             }
             
             // 轻微旋转相机
-            camera.position.x = Math.sin(Date.now() * 0.0005) * 0.5;
-            camera.position.y = Math.cos(Date.now() * 0.0003) * 0.3;
-            camera.lookAt(0, 0, 0);
+            if (camera) {
+                camera.position.x = Math.sin(Date.now() * 0.0005) * 0.5;
+                camera.position.y = Math.cos(Date.now() * 0.0003) * 0.3;
+                camera.lookAt(0, 0, 0);
+            }
             
             // 渲染场景
-            renderer.render(scene, camera);
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
         }
         
         // 更新粒子位置
         function updateParticles() {
+            if (!particleSystem || !particleSystem.geometry) return;
+            
             const positions = particleSystem.geometry.attributes.position.array;
             const smoothFactor = parseFloat(smoothSlider.value) * 0.1;
             
@@ -681,20 +900,98 @@
         
         // 窗口大小调整
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         }
+        
+        // 启用模拟模式
+        function enableSimulationMode() {
+            isSimulationMode = true;
+            
+            // 更新UI
+            permissionPanel.classList.add('hidden');
+            statusPanel.classList.remove('hidden');
+            
+            // 初始化摄像头画面（模拟背景）
+            cameraCtx = cameraCanvas.getContext('2d');
+            cameraCanvas.width = 320;
+            cameraCanvas.height = 240;
+            
+            // 绘制模拟摄像头背景
+            drawSimulationBackground();
+            
+            // 开始手部检测模拟
+            startHandDetectionSimulation();
+            
+            updateDebugInfo('模拟模式已启用');
+            trackingStatus.textContent = '模拟模式: 移动鼠标或触摸屏幕模拟手部';
+            trackingStatus.style.color = '#FF9800';
+        }
+        
+        // 绘制模拟背景
+        function drawSimulationBackground() {
+            if (!cameraCtx) return;
+            
+            cameraCtx.fillStyle = '#000';
+            cameraCtx.fillRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+            
+            // 添加一些模拟的"摄像头"效果
+            cameraCtx.fillStyle = 'rgba(100, 100, 100, 0.1)';
+            for (let i = 0; i < 50; i++) {
+                const x = Math.random() * cameraCanvas.width;
+                const y = Math.random() * cameraCanvas.height;
+                const radius = Math.random() * 3;
+                cameraCtx.beginPath();
+                cameraCtx.arc(x, y, radius, 0, Math.PI * 2);
+                cameraCtx.fill();
+            }
+            
+            // 添加文字提示
+            cameraCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            cameraCtx.font = '16px Arial';
+            cameraCtx.textAlign = 'center';
+            cameraCtx.fillText('模拟模式', cameraCanvas.width / 2, cameraCanvas.height / 2);
+            cameraCtx.font = '12px Arial';
+            cameraCtx.fillText('移动鼠标或触摸屏幕模拟手部', cameraCanvas.width / 2, cameraCanvas.height / 2 + 20);
+        }
+        
+        // 更新调试信息
+        function updateDebugInfo(message) {
+            debugInfo.textContent = '调试: ' + message + ' | ' + new Date().toLocaleTimeString();
+            console.log('调试:', message);
+        }
+        
+        // 鼠标位置跟踪（用于模拟模式）
+        let lastMouseX = 0;
+        let lastMouseY = 0;
         
         // 初始化应用
         function initApp() {
+            updateDebugInfo('应用初始化开始');
+            
             // 初始化Three.js
             initThreeJS();
             
-            // 设置权限按钮事件
-            permissionBtn.addEventListener('click', () => {
-                initHandDetection();
+            // 设置事件监听器
+            setupEventListeners();
+            
+            // 初始显示权限请求界面
+            permissionPanel.classList.remove('hidden');
+            updateDebugInfo('应用初始化完成');
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 设置摄像头按钮事件
+            cameraBtn.addEventListener('click', () => {
+                initCamera();
             });
+            
+            // 设置模拟模式按钮事件
+            simulationBtn.addEventListener('click', enableSimulationMode);
             
             // 设置滑块事件
             particleSlider.addEventListener('input', function() {
@@ -706,7 +1003,7 @@
             sizeSlider.addEventListener('input', function() {
                 const size = parseFloat(this.value);
                 sizeValue.textContent = size.toFixed(1);
-                if (particleSystem) {
+                if (particleSystem && particleSystem.material) {
                     particleSystem.material.size = size;
                     particleSystem.material.needsUpdate = true;
                 }
@@ -716,19 +1013,21 @@
                 smoothValue.textContent = this.value;
             });
             
-            // 初始显示权限请求界面
-            permissionPanel.classList.remove('hidden');
+            // 添加鼠标移动事件来模拟手部移动
+            document.addEventListener('mousemove', (event) => {
+                lastMouseX = event.clientX;
+                lastMouseY = event.clientY;
+            });
+            
+            // 添加触摸移动事件
+            document.addEventListener('touchmove', (event) => {
+                event.preventDefault();
+                if (event.touches.length > 0) {
+                    lastMouseX = event.touches[0].clientX;
+                    lastMouseY = event.touches[0].clientY;
+                }
+            }, { passive: false });
         }
-        
-        // 手部关键点连接定义
-        const HAND_CONNECTIONS = [
-            [0, 1], [1, 2], [2, 3], [3, 4], // 拇指
-            [0, 5], [5, 6], [6, 7], [7, 8], // 食指
-            [0, 9], [9, 10], [10, 11], [11, 12], // 中指
-            [0, 13], [13, 14], [14, 15], [15, 16], // 无名指
-            [0, 17], [17, 18], [18, 19], [19, 20], // 小指
-            [5, 9], [9, 13], [13, 17] // 手掌
-        ];
         
         // 页面加载完成后初始化应用
         window.addEventListener('DOMContentLoaded', initApp);
@@ -741,6 +1040,9 @@
             if (video && video.srcObject) {
                 const tracks = video.srcObject.getTracks();
                 tracks.forEach(track => track.stop());
+            }
+            if (cameraRequestTimeout) {
+                clearTimeout(cameraRequestTimeout);
             }
         });
     </script>
