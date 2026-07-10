@@ -1,8 +1,11 @@
 #### Submitted
 
-- <strong>Mingxing Jiang</strong>, Weiwei Fu*, Xiaoliang Zhao, Rong Gao, Duanping Xu, Sitan Wang* (2026). Unveiling the black-box: revealing and optimizing the targeted adsorption of heavy metals in water by MOFs via explainable machine learning.
+- <strong>Mingxing Jiang</strong>, Xiang Yin, Yuqiong Chen, Sijie Lin* (SIGMOD2027).
 
 #### Published
+
+- <strong>Mingxing Jiang</strong>, Weiwei Fu*, Xiaoliang Zhao, Rong Gao, Duanping Xu, Sitan Wang* (2026). Deciphering the multivariable interactions of MOFs in heavy metal adsorption via explainable machine learning for sustainable and 
+resource-efffcient adsorbent development. [[Paper]](https://doi.org/10.1016/j.jclepro.2026.148922)
 
 - <strong>Mingxing Jiang</strong>, Weiwei Fu, Ying Wang, Duanping Xu, Sitan Wang* (2024). Machine-learning-driven discovery of metal–organic framework adsorbents for hexavalent chromium removal from aqueous environments. <strong>Journal of Colloid And Interface Science </strong>. [[Paper]](https://doi.org/10.1016/j.jcis.2024.02.084)
 
