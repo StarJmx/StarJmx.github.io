@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>宇宙主宰 - 手势控制星系</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; color: white; font-family: sans-serif; }
+        #video-container { position: absolute; bottom: 20px; right: 20px; width: 200px; height: 150px; border-radius: 10px; overflow: hidden; border: 2px solid #333; opacity: 0.6; transform: scaleX(-1); }
+        #input_video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { display: block; }
+        .hud { position: absolute; top: 30px; left: 30px; pointer-events: none; }
+        .hud h1 { font-size: 24px; letter-spacing: 5px; text-transform: uppercase; margin: 0; background: linear-gradient(to right, #fff, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .instruction { color: #888; margin-top: 10px; font-size: 14px; }
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    </style>
+</head>
+<body>
+
+<div id="loading">正在构筑银河系...</div>
+
+<div class="hud">
+    <h1>Cosmos Controller</h1>
+    <div class="instruction">
+        • 移动手掌：操控星系旋转角度<br>
+        • 张开/捏合手指：执行空间跳跃（缩放视角）<br>
+        • 晃动手掌：引发引力风暴
+    </div>
+</div>
+
+<div id="video-container">
+    <video id="input_video"></video>
+</div>
+
+<!-- 引入 Three.js 和 MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+    let scene, camera, renderer, galaxy, stars;
+    let targetRotX = 0, targetRotY = 0;
+    let targetZ = 500;
+    const videoElement = document.getElementById('input_video');
+
+    // --- 初始化宇宙场景 ---
+    function initUniverse() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.z = 1000;
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        createGalaxy();
+        animate();
+        
+        document.getElementById('loading').style.display = 'none';
+    }
+
+    function createGalaxy() {
+        const particleCount = 80000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        const colorInside = new THREE.Color("#ff6030");
+        const colorOutside = new THREE.Color("#1b3984");
+
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            // 螺旋参数
+            const radius = Math.random() * 800;
+            const spinAngle = radius * 0.1;
+            const branchAngle = (i % 3) * ((Math.PI * 2) / 3);
+
+            const randomX = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 50;
+            const randomY = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 50;
+            const randomZ = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 50;
+
+            positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+            positions[i3 + 1] = randomY;
+            positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+
+            // 颜色混合
+            const mixedColor = colorInside.clone();
+            mixedColor.lerp(colorOutside, radius / 800);
+            colors[i3] = mixedColor.r;
+            colors[i3 + 1] = mixedColor.g;
+            colors[i3 + 2] = mixedColor.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({
+            size: 2,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 0.8,
+            depthWrite: false
+        });
+
+        galaxy = new THREE.Points(geometry, material);
+        scene.add(galaxy);
+
+        // 背景星空
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = new Float32Array(10000 * 3);
+        for(let i=0; i<30000; i++) starPos[i] = (Math.random() - 0.5) * 5000;
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 1}));
+        scene.add(stars);
+    }
+
+    // --- 手势识别逻辑 ---
+    const hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7
+    });
+
+    hands.onResults((results) => {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const hand = results.multiHandLandmarks[0];
+            
+            // 1. 映射位置到旋转
+            const centerX = hand[9].x; // 中指根部
+            const centerY = hand[9].y;
+            targetRotY = (centerX - 0.5) * 2; 
+            targetRotX = (centerY - 0.5) * 2;
+
+            // 2. 捏合度计算 (大拇指尖 4 到 食指尖 8 的距离)
+            const dx = hand[4].x - hand[8].x;
+            const dy = hand[4].y - hand[8].y;
+            const distance = Math.sqrt(dx*dx + dy*dy);
+            
+            // 映射距离到相机 Z 轴 (捏住时拉远，张开时拉近)
+            targetZ = 200 + (distance * 2000); 
+        }
+    });
+
+    const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => { await hands.send({image: videoElement}); },
+        width: 640, height: 480
+    });
+    cameraUtils.start();
+
+    // --- 动画循环 ---
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // 平滑插值 (Lerp) 使动作像丝绸般顺滑
+        galaxy.rotation.y += 0.002; // 自动缓慢自转
+        galaxy.rotation.x += (targetRotX * 0.5 - galaxy.rotation.x) * 0.05;
+        galaxy.rotation.y += (targetRotY * 0.5 - galaxy.rotation.y) * 0.05;
+        
+        camera.position.z += (targetZ - camera.position.z) * 0.1;
+        
+        // 视角微震动增加真实感
+        camera.lookAt(scene.position);
+        
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    initUniverse();
+</script>
+</body>
+</html>
