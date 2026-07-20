@@ -14,4 +14,4 @@ M.S., Environmental Science and Engineering, College of Environmental Science an
 B.E., Internet of Things Engineering, School of  Computer and Information Engineering, Xinxiang University.
 
 #### Research Interests
-AI for Research and Development: Artificial intelligence, Machine learning, Data mining, Intelligent applications, AI for Science (environment, materials, medicine, etc.).
+AI for Research and Development: Artificial intelligence (Machine learning, Data-Centric AI, LLM&Agent), Intelligent applications, AI for Science (environment, materials, medicine, etc.).
