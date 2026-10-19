@@ -10,7 +10,7 @@ Email: jiangmingxing97@163.com
 
 #### Education
 Ph.D., Intelligent Science and Technology, Shanghai Research Institute for Intelligent Autonomous Systems, Tongji University, Currently enrolled.\
-M.S., Environmental Science and Engineering, College of Environmental Science and Engineering, Liaoning Technical University.\
+M.E., Environmental Science and Engineering, College of Environmental Science and Engineering, Liaoning Technical University.\
 B.E., Internet of Things Engineering, School of  Computer and Information Engineering, Xinxiang University.
 
 #### Research Interests
