@@ -1,6 +1,6 @@
 #### Submitted
 
-- <strong>Mingxing Jiang</strong>, Xiang Yin, Yuqiong Chen, Sijie Lin* <strong>(SIGMOD2027) </strong>.
+- <strong>Mingxing Jiang</strong>, Xiang Yin, Yuqiong Chen, Sijie Lin* <strong>(VLDB2027) </strong>.
 
 #### Published
 
