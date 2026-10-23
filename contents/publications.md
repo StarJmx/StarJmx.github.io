@@ -1,6 +1,6 @@
 #### Submitted
 
-- <strong>Mingxing Jiang</strong>, Xiang Yin, Yuqiong Chen, Sijie Lin* <strong>(VLDB2027) </strong>.
+- <strong>Mingxing Jiang</strong>, Xiang Yin, Yuqiong Chen, Sijie Lin*. TAQS: Task-Aware Query-Anchored Data Selection for Scientific Machine Learning. <strong>(VLDB2027) </strong>.
 
 #### Published
 
